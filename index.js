@@ -5,6 +5,7 @@ const { PrismaClient } = require ("@prisma/client");
 const multiparty = require("multiparty");
 const fs = require("fs");
 const path = require("path");
+const { error } = require('console');
 
 const prisma = new PrismaClient();
 const app = express();
@@ -92,7 +93,7 @@ app.patch("/users/edit/:id", async (req, res) => {
                 id: parseInt(id),
             },
             data: {
-                active,
+                active: !!active, // Convertimos a booleano
             },
         });
         res.json(updatedUser);
@@ -102,30 +103,58 @@ app.patch("/users/edit/:id", async (req, res) => {
     }
 });
 
-//Endpoint para eliminar un usuario por su id
-app.delete("/users/delete/:id", async (req, res) => {
+
+// Endpoint para actualizar un usuario por su id
+app.patch("/users/update/:id", async (req, res) => {
     const { id } = req.params;
+    const { user_name, email } = req.body;
     try {
-      const { id } = req.params;
-      const user = await prisma.user.findUnique({
-        where: { id },
-        include: { posts: true },
-      });
+        const user = await prisma.user.findUnique({
+            where: { id },
+            include: { posts: true, address: true },
+        });
 
-      if(!user){
-        return res.status(404).json({ error: 'Usuario no encontrado' });
-      }
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
 
-      if(user.posts.length > 0){
-        await Promise.all(user.posts.map(async (post) => {
-            await prisma.post.delete({where:{id: post.id}});
-        }));
-      }
+        await prisma.user.update({
+            where: { id },
+            data: {
+                user_name,
+                email
+            },
+        });
 
-      const deleteUser = await prisma.user.delete({ where: { id } });
-      res.json(deleteUser);
-    } catch (error){
+        res.json({message: "Usuario actualizado"});
+    } catch (error) {
         res.status(500).json({ error: 'Error en el servidor', message: error.message });
+    }
+});
+
+// Endpoint para eliminar un usuario por su id
+app.delete('/users/delete/:id',  async (req, res) => {
+    try {
+        const {id} = req.params;
+        const user = await prisma.user.findUnique({
+            where: { id },
+            include: { posts: true },
+        });        
+
+        if (!user){
+            return res.status(404).json({error: 'Usuario no encontrado'});
+        }
+
+        if(user.posts.length > 0){
+            await Promise.all(user.posts.map(async (post) => {
+                await prisma.post.delete({where: { id: post.id }});
+            }));
+        }
+
+        const deleteUser = await prisma.user.delete({ where: { id } });
+        res.json(deleteUser);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al eliminar el usuario', message: error.message });
     }
 });
 
